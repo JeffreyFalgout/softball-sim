@@ -58,7 +58,7 @@ fn run<'a, S>(simulator: &S, lineups: &softball::lineup::PermutationGenerator<'a
     where S: softball::simulation::Simulator + Sync {
     let num_threads = num_cpus::get();
     let num_lineups = lineups.len();
-    let num_lineups_per_threads = num_lineups / num_threads;
+    let num_lineups_per_thread = num_lineups / num_threads;
 
     return crossbeam::scope(|s| {
         let mut workers = Vec::with_capacity(num_threads);
@@ -68,18 +68,23 @@ fn run<'a, S>(simulator: &S, lineups: &softball::lineup::PermutationGenerator<'a
                 let players: Vec<softball::Player> = lineups.heap.get().iter().cloned().cloned().collect();
                 let mut players: Vec<&softball::Player> = players.iter().collect();
                 let mut lineups = softball::lineup::PermutationGenerator::new(&mut players)
-                    .skip(i * num_lineups_per_threads);
+                    .skip(i * num_lineups_per_thread);
 
                 let mut rng = rand_chacha::ChaCha8Rng::from(rand_chacha::ChaCha8Core::from_entropy());
                 let mut best_runs = 0.0;
                 let mut best_lineup: Vec<softball::Player> = Vec::new();
 
-                while let Some(lineup) = lineups.next() {
-                    let runs = simulator.simulate_games(&mut rng, lineup, NUM_INNINGS, NUM_GAMES);
-                    local_pb.inc(1);
-                    if runs > best_runs {
-                        best_runs = runs;
-                        best_lineup = lineup.iter().cloned().cloned().collect();
+                for _ in 0..num_lineups_per_thread {
+                    match lineups.next() {
+                        Some(lineup) => {
+                            let runs = simulator.simulate_games(&mut rng, lineup, NUM_INNINGS, NUM_GAMES);
+                            local_pb.inc(1);
+                            if runs > best_runs {
+                                best_runs = runs;
+                                best_lineup = lineup.iter().cloned().cloned().collect();
+                            }
+                        },
+                        None => break,
                     }
                 }
 
