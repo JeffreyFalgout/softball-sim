@@ -1,0 +1,23 @@
+[package]
+name = "softball-sim"
+version = "0.1.0"
+authors = ["Jeffrey Falgout <jeffrey.falgout@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+crossbeam = "0.7.2"
+enum-iterator = "0.3.1"
+indicatif = "0.12.0"
+lazy_static = "1.4.0"
+multimap = "0.6.0"
+multiset = "0.0.5"
+num_cpus = "1.10.1"
+num_enum = "0.4.1"
+permutohedron = "0.2.4"
+rand = "0.7.2"
+rand_chacha = "0.2.1"
+serde = {version = "1.0.101", features = ["derive"]}
+serde_json = "1.0.40"
+streaming-iterator = "0.1.4"
