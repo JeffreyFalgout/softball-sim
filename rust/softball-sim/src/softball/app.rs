@@ -25,7 +25,8 @@ pub fn load_export<R: io::Read + ?Sized>(f: &mut R) -> io::Result<Vec<super::Pla
                     .map(|a|
                          match a.result.to_lowercase().as_str() {
                              "out" | "fc" | "sac" | "k" => super::Outcome::Out,
-                             "1b" | "e" | "bb"    => super::Outcome::Single,
+                             "bb"                 => super::Outcome::Walk,
+                             "1b" | "e"           => super::Outcome::Single,
                              "2b"                 => super::Outcome::Double,
                              "3b"                 => super::Outcome::Triple,
                              "hro"                => super::Outcome::Homerun,

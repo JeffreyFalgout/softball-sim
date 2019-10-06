@@ -8,10 +8,7 @@ pub trait Simulator {
     fn simulate_game<R: rand::Rng + ?Sized>(&self, rng: &mut R, lineup: &[&Player], num_innings: u32) -> u32;
 
     fn simulate_games<R: rand::Rng + ?Sized>(&self, rng: &mut R, lineup: &[&Player], num_innings: u32, num_games: u32) -> f64 {
-        let mut runs = 0;
-        for _ in 0..num_games {
-            runs += self.simulate_game(rng, lineup, num_innings);
-        }
+        let runs: u32 = (0..num_games).map(|_| self.simulate_game(rng, lineup, num_innings)).sum();
         return runs as f64 / num_games as f64;
     }
 }
@@ -27,28 +24,22 @@ impl MonteCarlo {
 
 impl Simulator for MonteCarlo {
     fn simulate_game<R: rand::Rng + ?Sized>(&self, rng: &mut R, lineup: &[&Player], num_innings: u32) -> u32 {
-        let mut total_runs = 0;
-        let mut batter = 0;
-
-        for _ in 0..num_innings {
-            let mut runs = 0;
+        return (0..num_innings).map(|_| {
             let mut bases = BaseState::new();
             let mut outs = 0;
-            while outs < 3 && runs < MAX_RUNS_PER_INNING {
-                let o = lineup[batter].hit(rng);
-                match o {
-                    Outcome::Out => outs += 1,
-                    _ => runs += bases.advance_runners(o.num_bases()),
-                }
-
-                batter += 1;
-                batter %= lineup.len()
-            }
-
-            total_runs += runs;
-        }
-
-        return total_runs;
+            return lineup.iter().cycle()
+                .map(|p| p.hit(rng))
+                .take_while(|o| {
+                    match o {
+                        Outcome::Out => outs += 1,
+                        _ => {},
+                    }
+                    return outs < 3;
+                })
+                .take(100)
+                .map(|o| bases.advance_runners(o.num_bases()))
+                .sum::<u32>();
+        }).sum();
     }
 }
 

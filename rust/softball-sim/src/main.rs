@@ -16,7 +16,7 @@ use std::path::Path;
 use crossbeam;
 use indicatif::{ProgressBar, ProgressStyle};
 use num_cpus;
-use rand_chacha::rand_core::SeedableRng;
+use rand::{SeedableRng, rngs};
 use streaming_iterator::StreamingIterator;
 
 static NUM_INNINGS: u32 = 7;
@@ -70,7 +70,7 @@ fn run<'a, S>(simulator: &S, lineups: &softball::lineup::PermutationGenerator<'a
                 let mut lineups = softball::lineup::PermutationGenerator::new(&mut players)
                     .skip(i * num_lineups_per_thread);
 
-                let mut rng = rand_chacha::ChaCha8Rng::from(rand_chacha::ChaCha8Core::from_entropy());
+                let mut rng = rngs::SmallRng::from_entropy();
                 let mut best_runs = 0.0;
                 let mut best_lineup: Vec<softball::Player> = Vec::new();
 
