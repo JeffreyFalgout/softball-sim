@@ -1,30 +1,56 @@
 use super::*;
 
+use std::iter;
+
 use permutohedron;
 use permutohedron::Heap;
 use streaming_iterator::StreamingIterator;
 
-pub trait Generator<'a>: StreamingIterator<Item = [&'a Player]> {
-    fn len(&self) -> usize;
+pub trait Lineup<'a> {
+    type O: BattingOrder<'a>;
 
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let l = self.len();
-        return (l, Some(l));
+    fn players(&self) -> &'a [&'a Player];
+
+    fn order(&self) -> Self::O;
+}
+
+pub trait BattingOrder<'a> {
+    fn next(&mut self) -> &'a Player;
+}
+
+impl<'a> Lineup<'a> for &'a [&'a Player] {
+    type O = CycleBattingOrder<'a>;
+
+    fn players(&self) -> &'a [&'a Player] {
+        return self;
     }
+
+    fn order(&self) -> Self::O {
+        return CycleBattingOrder {
+            iter: self.iter().cycle(),
+        }
+    }
+}
+
+pub struct CycleBattingOrder<'a> {
+    iter: iter::Cycle<std::slice::Iter<'a, &'a Player>>,
+}
+
+impl<'a> BattingOrder<'a> for CycleBattingOrder<'a> {
+    fn next(&mut self) -> &'a Player {
+        return self.iter.next().unwrap();
+    }
+}
+
+pub trait Generator<'a>: StreamingIterator where Self::Item: 'a, &'a Self::Item: Lineup<'a>{
+    fn new(players: &'a mut [&'a Player]) -> Self;
+
+    fn len(players: &[&Player]) -> usize;
 }
 
 pub struct PermutationGenerator<'a> {
-    pub heap: Heap<'a, [&'a Player], &'a Player>,
+    heap: Heap<'a, [&'a Player], &'a Player>,
     has_next: bool,
-}
-
-impl<'a> PermutationGenerator<'a> {
-    pub fn new(players: &'a mut [&'a Player]) -> PermutationGenerator<'a> {
-        return PermutationGenerator{
-            heap: Heap::new(players),
-            has_next: false,
-        };
-    }
 }
 
 impl<'a> StreamingIterator for PermutationGenerator<'a> {
@@ -43,10 +69,22 @@ impl<'a> StreamingIterator for PermutationGenerator<'a> {
             false => None,
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = <Self as Generator>::len(self.heap.get());
+        return (len, Some(len));
+    }
 }
 
 impl<'a> Generator<'a> for PermutationGenerator<'a> {
-    fn len(&self) -> usize {
-        return permutohedron::factorial(self.heap.get().len());
+    fn new(players: &'a mut [&'a Player]) -> Self {
+        return PermutationGenerator{
+            heap: Heap::new(players),
+            has_next: false,
+        };
+    }
+
+    fn len(players: &[&Player]) -> usize {
+        return permutohedron::factorial(players.len());
     }
 }

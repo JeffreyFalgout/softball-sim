@@ -2,13 +2,21 @@ use super::*;
 
 use rand;
 
-const MAX_RUNS_PER_INNING: u32 = 100;
+const MAX_PLATE_APPEARANCES_PER_INNING: u32 = 100;
 
 pub trait Simulator {
-    fn simulate_game<R: rand::Rng + ?Sized>(&self, rng: &mut R, lineup: &[&Player], num_innings: u32) -> u32;
+    fn simulate_game<'a, R, O>(&self, rng: &mut R, batting_order: &mut O, num_innings: u32) -> u32
+        where R: rand::Rng + ?Sized,
+              O: lineup::BattingOrder<'a> + Sized;
 
-    fn simulate_games<R: rand::Rng + ?Sized>(&self, rng: &mut R, lineup: &[&Player], num_innings: u32, num_games: u32) -> f64 {
-        let runs: u32 = (0..num_games).map(|_| self.simulate_game(rng, lineup, num_innings)).sum();
+    fn simulate_games<'a, R, L, O>(&self, rng: &mut R, lineup: &L, num_innings: u32, num_games: u32) -> f64
+        where R: rand::Rng + ?Sized,
+              L: lineup::Lineup<'a, O = O>,
+              O: lineup::BattingOrder<'a> {
+        let runs: u32 = (0..num_games).map(|_| {
+            let mut order = lineup.order();
+            return self.simulate_game(rng, &mut order, num_innings);
+        }).sum();
         return runs as f64 / num_games as f64;
     }
 }
@@ -23,12 +31,14 @@ impl MonteCarlo {
 }
 
 impl Simulator for MonteCarlo {
-    fn simulate_game<R: rand::Rng + ?Sized>(&self, rng: &mut R, lineup: &[&Player], num_innings: u32) -> u32 {
+    fn simulate_game<'a, R, O>(&self, rng: &mut R, batting_order: &mut O, num_innings: u32) -> u32
+        where R: rand::Rng + ?Sized,
+              O: lineup::BattingOrder<'a> + Sized {
         return (0..num_innings).map(|_| {
             let mut bases = BaseState::new();
             let mut outs = 0;
-            return lineup.iter().cycle()
-                .map(|p| p.hit(rng))
+            return (0..MAX_PLATE_APPEARANCES_PER_INNING)
+                .map(|_| batting_order.next().hit(rng))
                 .take_while(|o| {
                     match o {
                         Outcome::Out => outs += 1,
@@ -36,7 +46,6 @@ impl Simulator for MonteCarlo {
                     }
                     return outs < 3;
                 })
-                .take(100)
                 .map(|o| bases.advance_runners(o.num_bases()))
                 .sum::<u32>();
         }).sum();

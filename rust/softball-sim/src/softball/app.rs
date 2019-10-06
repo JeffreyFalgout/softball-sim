@@ -71,6 +71,7 @@ struct Team {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
 struct Game {
     plateAppearances: Vec<PlateAppearance>,
 }

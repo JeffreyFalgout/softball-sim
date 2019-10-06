@@ -2,8 +2,9 @@
 extern crate lazy_static;
 
 mod softball;
-use softball::simulation::Simulator;
-use softball::lineup::{self, Generator};
+
+use softball::lineup::Generator;
+use softball::lineup::Lineup;
 
 use std::clone::Clone;
 use std::collections::HashSet;
@@ -38,37 +39,35 @@ fn main() -> Result<(), Box<Error>> {
     }
 
     let players: Vec<_> = all_players.iter().filter(|p| players_in_game.contains(&p.name)).collect();
-
-    let mut data = players.clone();
-    let lineups = lineup::PermutationGenerator::new(&mut data);
-
     let simulator = softball::simulation::MonteCarlo::new();
 
-    let pb = ProgressBar::new(lineups.len() as u64);
-    pb.set_style(ProgressStyle::default_bar()
-                 .template("[{elapsed_precise}][{bar}]{pos}/{len} ({eta})")
-                 .progress_chars("#>-"));
-
-    println!("{:?}", run(&simulator, &lineups, pb));
+    println!("{:?}", run::<_, softball::lineup::PermutationGenerator>(&simulator, &players));
 
     return Ok(());
 }
 
-fn run<'a, S>(simulator: &S, lineups: &softball::lineup::PermutationGenerator<'a>, pb: ProgressBar) -> (f64, Vec<softball::Player>)
-    where S: softball::simulation::Simulator + Sync {
+fn run<'a, S, G>(simulator: &S, players: &'a [&'a softball::Player]) -> (f64, Vec<softball::Player>)
+    where S: softball::simulation::Simulator + Sync,
+          G: 'a + softball::lineup::Generator<'a>,
+          &'a <G as StreamingIterator>::Item: softball::lineup::Lineup<'a> {
     let num_threads = num_cpus::get();
-    let num_lineups = lineups.len();
+    let num_lineups = G::len(players);
     let num_lineups_per_thread = num_lineups / num_threads;
+
+    let pb = ProgressBar::new(num_lineups as u64);
+    pb.set_style(ProgressStyle::default_bar()
+                 .template("[{elapsed_precise}][{bar}]{pos}/{len} ({eta})")
+                 .progress_chars("#>-"));
+
 
     return crossbeam::scope(|s| {
         let mut workers = Vec::with_capacity(num_threads);
         for i in 0..num_threads {
             let local_pb = pb.clone();
             workers.push(s.spawn(move |_| {
-                let players: Vec<softball::Player> = lineups.heap.get().iter().cloned().cloned().collect();
+                let players: Vec<softball::Player> = players.iter().cloned().cloned().collect();
                 let mut players: Vec<&softball::Player> = players.iter().collect();
-                let mut lineups = softball::lineup::PermutationGenerator::new(&mut players)
-                    .skip(i * num_lineups_per_thread);
+                let mut lineups = softball::lineup::PermutationGenerator::new(&mut players).skip(i * num_lineups_per_thread);
 
                 let mut rng = rngs::SmallRng::from_entropy();
                 let mut best_runs = 0.0;
@@ -77,11 +76,11 @@ fn run<'a, S>(simulator: &S, lineups: &softball::lineup::PermutationGenerator<'a
                 for _ in 0..num_lineups_per_thread {
                     match lineups.next() {
                         Some(lineup) => {
-                            let runs = simulator.simulate_games(&mut rng, lineup, NUM_INNINGS, NUM_GAMES);
+                            let runs = simulator.simulate_games(&mut rng, &lineup, NUM_INNINGS, NUM_GAMES);
                             local_pb.inc(1);
                             if runs > best_runs {
                                 best_runs = runs;
-                                best_lineup = lineup.iter().cloned().cloned().collect();
+                                best_lineup = lineup.players().iter().cloned().cloned().collect();
                             }
                         },
                         None => break,
